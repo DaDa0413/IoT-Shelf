@@ -33,8 +33,9 @@ def on_message(client, userdata, msg):
 
 def btn_callback(channel):
     #TODO
-    print('[INFO] Goods taken')
-    pass
+    global switch_enable
+    if switch_enable:
+        print('[INFO] Goods taken')
 
 if __name__ == '__main__':
 
@@ -49,11 +50,16 @@ if __name__ == '__main__':
     client.loop_start()
 
     # Set RPi
+    switch_enable = False
+    GPIO.cleanup()
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(photoresistor_pin, GPIO.IN)
     GPIO.setup(switch1_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  
     GPIO.setup(switch2_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  
     GPIO.setup(switch3_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  
+    GPIO.add_event_detect(switch1_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
+    GPIO.add_event_detect(switch2_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
+    GPIO.add_event_detect(switch3_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
     GPIO.setup(buzzer_pin, GPIO.OUT)  
 
     shelf = shelf_module(client)
@@ -63,36 +69,36 @@ if __name__ == '__main__':
                 mqtt_sub_enable = True
         elif shelf.state == 'wait_for_open':
             print('wait for open~~~')
-            print('[INFO] Start photoresistor Module (High Enable)')
+            print('[INFO] Start photoresistor Module (Low Enable)')
             while True:
-                if GPIO.input(photoresistor_pin):
+                if not GPIO.input(photoresistor_pin):
                     shelf.open_lid()
                     break
                 time.sleep(0.2)
         elif shelf.state == 'wait_for_close':
             # TODO Enable switch & timer
             print('wait for close~~')
-            print('[INFO] Start photoresistor Module (Low Enable)')
+            print('[INFO] Start photoresistor Module (High Enable)')
             prev_time = time.time()
-            GPIO.add_event_detect(switch1_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
-            GPIO.add_event_detect(switch2_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
-            GPIO.add_event_detect(switch3_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
+            switch_enable = True
             while True:
-                if not GPIO.input(photoresistor_pin):
+                if GPIO.input(photoresistor_pin):
                     shelf.close_lid()
                     break
-                if time.time() - prev_time > 30:
+                if time.time() - prev_time > 5:
                     print('[Warn] Time out')
                     shelf.open_too_long()
                     break
                 time.sleep(0.2)
+            switch_enable = False
         elif shelf.state == 'forget_to_close':
-            # TODO Enable buzzer
             print('forget to close~~')
-            GPIO.output(buzzer_pin, GPIO.HIGH)
             while True:
-                if not GPIO.input(photoresistor_pin):
-                    GPIO.output(buzzer_pin, GPIO.LOW)
+                GPIO.output(buzzer_pin, GPIO.HIGH)
+                time.sleep(0.001)
+                GPIO.output(buzzer_pin, GPIO.LOW)
+                time.sleep(0.001)
+                if GPIO.input(photoresistor_pin):
                     shelf.close_lid()
                     break
         else:
