@@ -15,7 +15,7 @@ class shelf_module(object):
     def get_mqtt_handler(self):
         # self.client.loop_stop()
         self.get_mqtt()
-        print('State:' + self.state)
+        print('[INFO] State:' + self.state)
     
     def open_lid_handler(self):
         pass
