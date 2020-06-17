@@ -18,6 +18,10 @@ switch1_pin = 17
 switch2_pin = 22
 switch3_pin = 27
 buzzer_pin = 24
+motor_pin = 12
+
+PWM_FREQ = 50
+
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code: {}".format(str(rc)))
     client.subscribe(topic, 2)
@@ -25,10 +29,12 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     global mqtt_sub_enable
+    global pwm
     json_array = json.loads(str(msg.payload)[2:-1])
     # Enable lid
     if json_array['value'][0] == '1' and mqtt_sub_enable == True:
         shelf.get_mqtt_handler()
+        pwm.ChangeDutyCycle(angle_to_duty_cycle(90))
         mqtt_sub_enable = False
 
 def btn_callback(channel):
@@ -36,6 +42,10 @@ def btn_callback(channel):
     global switch_enable
     if switch_enable:
         print('[INFO] Goods taken')
+
+def angle_to_duty_cycle(angle=0):
+    duty_cycle = (0.05 * PWM_FREQ) + (0.19 * PWM_FREQ * angle / 180)
+    return duty_cycle
 
 if __name__ == '__main__':
 
@@ -57,15 +67,20 @@ if __name__ == '__main__':
     GPIO.setup(switch1_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  
     GPIO.setup(switch2_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  
     GPIO.setup(switch3_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  
+    GPIO.setup(buzzer_pin, GPIO.OUT)  
+    GPIO.setup(motor_pin, GPIO.OUT)
     GPIO.add_event_detect(switch1_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
     GPIO.add_event_detect(switch2_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
     GPIO.add_event_detect(switch3_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
-    GPIO.setup(buzzer_pin, GPIO.OUT)  
+    pwm = GPIO.PWM(motor_pin, PWM_FREQ)
+    pwm.start(0)
 
     shelf = shelf_module(client)
     while(True):
         if shelf.state == 'wait_for_mqtt':
             if mqtt_sub_enable == False:
+                print('wait for mqtt~~~')
+                pwm.ChangeDutyCycle(angle_to_duty_cycle(180))
                 mqtt_sub_enable = True
         elif shelf.state == 'wait_for_open':
             print('wait for open~~~')
