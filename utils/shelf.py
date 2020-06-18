@@ -4,7 +4,6 @@ class shelf_module(object):
     states = ['wait_for_mqtt', 'wait_for_open', 'wait_for_close', 'forget_to_close']
 
     def __init__(self, client):
-        self.client = client
         self.machine = Machine(model=self, states=shelf_module.states, initial='wait_for_mqtt')
         self.machine.add_transition(trigger='get_mqtt', source='wait_for_mqtt', dest='wait_for_open')
         self.machine.add_transition(trigger='open_lid', source='wait_for_open', dest='wait_for_close')
