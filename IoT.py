@@ -1,16 +1,18 @@
-import paho.mqtt.client as mqtt
+# import paho.mqtt.client as mqtt
 import json
 import time
 import sys
 import RPi.GPIO as GPIO
 
 from utils.shelf import shelf_module
+from utils.mqtt_lib import mqtt_class
+# import mqtt_lib as mqtt_lib
 
-user = 'iot2020'
-password = '123456'
+# user = 'iot2020'
+# password = '123456'
 
-host = "35.233.225.236"
-shelfID = 'Xlwra2HLExjGArkgxtcl'
+# host = "35.233.225.236"
+# shelfID = 'Xlwra2HLExjGArkgxtcl'
 
 photoresistor_pin = 23
 switch1_pin = 17
@@ -21,16 +23,16 @@ motor_pin = 12
 
 PWM_FREQ = 50
 
-def on_connect(client, userdata, flags, rc):
-    print("Connected with result code: {}".format(str(rc)))
-    client.subscribe(shelfID + '/open', 2)
+# def on_connect(client, userdata, flags, rc):
+#     print("Connected with result code: {}".format(str(rc)))
+#     client.subscribe(shelfID + '/open', 2)
 
-def on_message(client, userdata, msg):
-    global lock
+# def on_message(client, userdata, msg):
+#     global lock
 
-    # Enable lid
-    if int(msg.payload) == 1:
-        lock = False
+#     # Enable lid
+#     if int(msg.payload) == 1:
+#         lock = False
 
 def btn_callback(channel):
     #TODO
@@ -45,13 +47,14 @@ def angle_to_duty_cycle(angle=0):
 if __name__ == '__main__':
 
     # Set mqtt
-    lock = True
-    client = mqtt.Client()
-    client.on_connect = on_connect
-    client.on_message = on_message
-    client.username_pw_set(user, password)
-    client.connect(host, 1883, 120)
-    client.loop_start()
+    # lock = True
+    # client = mqtt.Client()
+    # client.on_connect = on_connect
+    # client.on_message = on_message
+    # client.username_pw_set(user, password)
+    # client.connect(host, 1883, 120)
+    # client.loop_start()
+    mqtt = mqtt_class()
 
     # Set RPi
     switch_enable = False
@@ -68,14 +71,13 @@ if __name__ == '__main__':
     pwm = GPIO.PWM(motor_pin, PWM_FREQ)
     pwm.start(0)
 
-
-    shelf = shelf_module(client)
+    shelf = shelf_module()
     try:
         while(True):
             if shelf.state == 'wait_for_mqtt':
                 print('[INFO] State: wait_for_mqtt')
                 while True:
-                    if lock == False:
+                    if mqtt.lock == False:
                         pwm.ChangeDutyCycle(angle_to_duty_cycle(90))
                         shelf.get_mqtt()
                         break
@@ -97,7 +99,7 @@ if __name__ == '__main__':
                     if GPIO.input(photoresistor_pin):
                         shelf.close_lid()
                         pwm.ChangeDutyCycle(angle_to_duty_cycle(180))
-                        lock = True
+                        mqtt.lock = True
 
                         break
                     if time.time() - prev_time > 5:
@@ -115,7 +117,7 @@ if __name__ == '__main__':
                     if GPIO.input(photoresistor_pin):
                         shelf.close_lid()
                         pwm.ChangeDutyCycle(angle_to_duty_cycle(180))
-                        lock = True
+                        mqtt.lock = True
                         break
             else:
                 print("[ERROR] Unknown state")
