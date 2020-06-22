@@ -1,4 +1,3 @@
-# import paho.mqtt.client as mqtt
 import json
 import time
 import sys
@@ -6,13 +5,6 @@ import RPi.GPIO as GPIO
 
 from utils.shelf import shelf_module
 from utils.mqtt_lib import mqtt_class
-# import mqtt_lib as mqtt_lib
-
-# user = 'iot2020'
-# password = '123456'
-
-# host = "35.233.225.236"
-# shelfID = 'Xlwra2HLExjGArkgxtcl'
 
 photoresistor_pin = 23
 switch1_pin = 17
@@ -23,38 +15,42 @@ motor_pin = 12
 
 PWM_FREQ = 50
 
-# def on_connect(client, userdata, flags, rc):
-#     print("Connected with result code: {}".format(str(rc)))
-#     client.subscribe(shelfID + '/open', 2)
-
-# def on_message(client, userdata, msg):
-#     global lock
-
-#     # Enable lid
-#     if int(msg.payload) == 1:
-#         lock = False
-
-def btn_callback(channel):
+def btn_callback17(channel):
     #TODO
     global switch_enable
-    if switch_enable:
-        print('[INFO] Goods taken')
+    global good_17
+    if switch_enable and good_17:
+        mqtt.take_goods()
+        good_17 = False
+
+def btn_callback22(channel):
+    #TODO
+    global switch_enable
+    global good_22
+    if switch_enable and good_22:
+        mqtt.take_goods()
+        good_22 = False
+
+def btn_callback27(channel):
+    #TODO
+    global switch_enable
+    global good_27
+    if switch_enable and good_27:
+        mqtt.take_goods()
+        good_27 = False
 
 def angle_to_duty_cycle(angle=0):
     duty_cycle = (0.05 * PWM_FREQ) + (0.19 * PWM_FREQ * angle / 180)
     return duty_cycle
 
 if __name__ == '__main__':
+    
+    good_17 = False
+    good_22 = False
+    good_27 = False
 
     # Set mqtt
-    # lock = True
-    # client = mqtt.Client()
-    # client.on_connect = on_connect
-    # client.on_message = on_message
-    # client.username_pw_set(user, password)
-    # client.connect(host, 1883, 120)
-    # client.loop_start()
-    mqtt = mqtt_class()
+    mqtt = mqtt_class(sys.argv[1])
 
     # Set RPi
     switch_enable = False
@@ -65,11 +61,22 @@ if __name__ == '__main__':
     GPIO.setup(switch3_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  
     GPIO.setup(buzzer_pin, GPIO.OUT)  
     GPIO.setup(motor_pin, GPIO.OUT)
-    GPIO.add_event_detect(switch1_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
-    GPIO.add_event_detect(switch2_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
-    GPIO.add_event_detect(switch3_pin, GPIO.FALLING, callback=btn_callback, bouncetime=300)  
     pwm = GPIO.PWM(motor_pin, PWM_FREQ)
     pwm.start(0)
+    pwm.ChangeDutyCycle(angle_to_duty_cycle(180))
+
+    if  GPIO.input(switch1_pin):
+        good_17 = True
+        print('[INIT] Good 1 exist')
+        GPIO.add_event_detect(switch1_pin, GPIO.FALLING, callback=btn_callback17, bouncetime=1000)  
+    if  GPIO.input(switch2_pin):
+        good_22 = True
+        print('[INIT] Good 2 exist')
+        GPIO.add_event_detect(switch2_pin, GPIO.FALLING, callback=btn_callback22, bouncetime=1000)  
+    if  GPIO.input(switch3_pin):
+        good_27 = True
+        print('[INIT] Good 3 exist')
+        GPIO.add_event_detect(switch3_pin, GPIO.FALLING, callback=btn_callback27, bouncetime=1000)  
 
     shelf = shelf_module()
     try:
@@ -77,32 +84,36 @@ if __name__ == '__main__':
             if shelf.state == 'wait_for_mqtt':
                 print('[INFO] State: wait_for_mqtt')
                 while True:
+                    # print(GPIO.input(switch1_pin))
+                    # print(GPIO.input(switch2_pin))
+                    # print(GPIO.input(switch3_pin))
+                    # time.sleep(1)
                     if mqtt.lock == False:
                         pwm.ChangeDutyCycle(angle_to_duty_cycle(90))
                         shelf.get_mqtt()
                         break
             elif shelf.state == 'wait_for_open':
                 print('[INFO] State: wait_for_open')
-                print('[INFO] Start photoresistor Module (Low Enable)')
+                print('[ACT] Start photoresistor Module (Low Enable)')
                 while True:
                     if not GPIO.input(photoresistor_pin):
                         shelf.open_lid()
                         break
                     time.sleep(0.2)
             elif shelf.state == 'wait_for_close':
-                # TODO Enable switch & timer
                 print('[INFO] State: wait_for_close')
-                print('[INFO] Start photoresistor Module (High Enable)')
+                print('[ACT] Start photoresistor Module (High Enable)')
                 prev_time = time.time()
                 switch_enable = True
                 while True:
                     if GPIO.input(photoresistor_pin):
                         shelf.close_lid()
+                        mqtt.close_lid()
+                        time.sleep(5)
                         pwm.ChangeDutyCycle(angle_to_duty_cycle(180))
                         mqtt.lock = True
-
                         break
-                    if time.time() - prev_time > 5:
+                    if time.time() - prev_time > 30:
                         shelf.open_too_long()
                         break
                     time.sleep(0.2)
@@ -116,6 +127,8 @@ if __name__ == '__main__':
                     time.sleep(0.0009)
                     if GPIO.input(photoresistor_pin):
                         shelf.close_lid()
+                        mqtt.close_lid()
+                        time.sleep(5)
                         pwm.ChangeDutyCycle(angle_to_duty_cycle(180))
                         mqtt.lock = True
                         break
@@ -123,5 +136,8 @@ if __name__ == '__main__':
                 print("[ERROR] Unknown state")
     except KeyboardInterrupt:
         print('[INFO] Bye~')
+        pwm.ChangeDutyCycle(angle_to_duty_cycle(90))
+        time.sleep(2)
         GPIO.cleanup()
+        mqtt.shut_down()
             
